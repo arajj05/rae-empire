@@ -1,0 +1,34 @@
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config(); // Load environment variables from .env
+const session = require("express-session"); // For session management
+
+const app = express();
+const PORT = 3000; // Port number
+
+// Set up session middleware to store state
+app.use(session({
+  secret: 'your-session-secret', // Replace with a secret
+  resave: false,
+  saveUninitialized: true,
+}));
+
+app.use(cors());
+app.use(express.json());
+
+// Routes for QuickBooks OAuth
+const quickbooksAuth = require("./quickbooksAuth");  // Path to quickbooksAuth.js
+const callbackServer = require("./callbackServer");  // Path to callbackServer.js
+
+app.use("/auth", quickbooksAuth); // Route to initiate OAuth flow
+app.use("/callback", callbackServer); // Route to handle callback after OAuth authorization
+
+// Default route for testing
+app.get("/", (req, res) => {
+  res.send("Server is running!");
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
