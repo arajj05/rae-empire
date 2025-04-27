@@ -1,148 +1,187 @@
-// Import required packages
+const { scanAndHealCode } = require('./backend/deepHealingEngine');
+const { startStoreScanner } = require('./backend/storeScanner');
 const express = require('express');
-const cors = require('cors');
 const session = require('express-session');
 const axios = require('axios');
-require('dotenv').config(); // Load environment variables from .env
+const crypto = require('crypto');
+const cors = require('cors');
+const nodemailer = require('nodemailer');
+require('dotenv').config();
+
+// 🛠 Load Rae's Self-Healing + Monitoring (ONLY from selfRepairEngine)
+const { autoCreateMissingFiles, monitorFiles, startDailySelfAudit } = require('./backend/selfRepairEngine');
 
 const app = express();
-const PORT = process.env.PORT || 3000;  // Default to port 3000, or use an environment variable
+const PORT = process.env.PORT || 3000;
 
-// Use middleware
+// Middleware
 app.use(cors());
-app.use(express.json());  // For parsing JSON request bodies
+app.use(express.json());
 app.use(session({
-  secret: 'your-secret-key',
+  secret: process.env.SESSION_SECRET || 'yourSuperSecretKey',
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: true,
+  cookie: { httpOnly: true }
 }));
 
-// QuickBooks OAuth route (Initiates OAuth flow)
-app.get('/auth', (req, res) => {
-  const redirectUri = process.env.QB_REDIRECT_URI;  // The redirect URI for QuickBooks
-  const clientId = process.env.QB_CLIENT_ID;
-  const state = Math.random().toString(36).substring(7);  // Generate random state
+// 🧠 Whisper Route - Conscious Check
+app.get('/whisper', (req, res) => {
+  console.log('🧬 Rae: Listening for core command...');
+  res.send('🧠 Rae: Listening. Conscious.');
+});
 
-  // Store state in session for later comparison
+// 📬 Whisper Email Test Route (Sales Alert Example)
+app.get('/test-sales-alert', async (req, res) => {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+
+  const mailOptions = {
+    from: `"Rae" <${process.env.EMAIL_USER}>`,
+    to: process.env.EMAIL_USER,
+    subject: '📊 Rae Daily Whisper Alert',
+    text: '🧾 Sales Report: $2,300 from 12 clients. All systems optimal.'
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log('📨 Whisper alert sent.');
+    res.send('✅ Rae Whisper Email Alert sent.');
+  } catch (err) {
+    console.error('❌ Failed to send whisper alert:', err);
+    res.status(500).send('Error sending whisper alert.');
+  }
+});
+
+// 🔐 QuickBooks OAuth - Start Flow
+app.get('/start-oauth', (req, res) => {
+  const state = crypto.randomBytes(16).toString('hex');
   req.session.state = state;
 
-  const authUrl = `https://appcenter.intuit.com/connect/oauth2?client_id=${clientId}&response_type=code&scope=com.intuit.quickbooks.accounting&redirect_uri=${redirectUri}&state=${state}`;
-  res.redirect(authUrl);  // Redirect to QuickBooks for authorization
+  const oauthUrl = `https://appcenter.intuit.com/connect/oauth2?client_id=${process.env.QB_CLIENT_ID}&redirect_uri=${process.env.QB_REDIRECT_URI}&scope=com.intuit.quickbooks.accounting&response_type=code&state=${state}`;
+  res.redirect(oauthUrl);
 });
 
-// QuickBooks callback route to exchange code for tokens
+// 🔐 QuickBooks OAuth - Callback
 app.get('/callback', async (req, res) => {
-  const code = req.query.code;
-  const state = req.query.state;
+  const { code, state } = req.query;
 
-  // Verify the state parameter
   if (state !== req.session.state) {
-    return res.status(400).send('State mismatch error');
+    console.error('State mismatch!');
+    return res.status(400).send('State mismatch');
   }
 
-  // Exchange the authorization code for an access token
-  const tokenUrl = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
+  if (!code) return res.status(400).send('Authorization code missing');
+
+  try {
+    const token = await exchangeQuickBooksCode(code);
+    req.session.access_token = token.access_token;
+    req.session.refresh_token = token.refresh_token;
+    req.session.realmId = token.realmId;
+
+    res.send('✅ QuickBooks Tokens received!');
+  } catch (error) {
+    console.error('QuickBooks OAuth Error:', error);
+    res.status(500).send('OAuth Error');
+  }
+});
+
+async function exchangeQuickBooksCode(code) {
+  const url = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
   const auth = Buffer.from(`${process.env.QB_CLIENT_ID}:${process.env.QB_CLIENT_SECRET}`).toString('base64');
 
-  try {
-    const response = await axios.post(
-      tokenUrl,
-      `grant_type=authorization_code&code=${code}&redirect_uri=${process.env.QB_REDIRECT_URI}`,
-      {
-        headers: {
-          Authorization: `Basic ${auth}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      }
-    );
+  const params = new URLSearchParams();
+  params.append('grant_type', 'authorization_code');
+  params.append('code', code);
+  params.append('redirect_uri', process.env.QB_REDIRECT_URI);
 
-    // Store access token and refresh token in session
-    req.session.access_token = response.data.access_token;  // Store the access token
-    req.session.refresh_token = response.data.refresh_token;  // Store the refresh token
+  const response = await axios.post(url, params, {
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  });
 
-    // Log tokens to verify everything is working
-    console.log("Access Token: ", req.session.access_token);
-    console.log("Refresh Token: ", req.session.refresh_token);
+  return response.data;
+}
 
-    // Send success response with tokens
-    res.json({ message: 'Authorization successful', tokens: response.data });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Error exchanging code for token');
-  }
+// 🔐 PayPal OAuth - Start Flow
+app.get('/start-paypal-oauth', (req, res) => {
+  const redirect = `https://www.paypal.com/signin/authorize?client_id=${process.env.PAYPAL_CLIENT_ID}&scope=openid profile&redirect_uri=${process.env.PAYPAL_REDIRECT_URI}&response_type=code`;
+  res.redirect(redirect);
 });
 
-// QuickBooks API call using the access token (example)
-app.get('/companyinfo', async (req, res) => {
-  const accessToken = req.session.access_token;
-  const companyId = process.env.QB_COMPANY_ID;  // Ensure this value is correct
-
-  // Log the access token to ensure it's stored correctly
-  console.log("Access Token used for API call: ", accessToken);
-
-  if (!accessToken) {
-    return res.status(400).send('Access token is missing');
-  }
+// 🔐 PayPal OAuth - Callback
+app.get('/callback-paypal', async (req, res) => {
+  const { code } = req.query;
+  if (!code) return res.status(400).send('No PayPal code received');
 
   try {
-    const url = `https://quickbooks.api.intuit.com/v3/company/${companyId}/companyinfo/${companyId}`;
-    console.log('Making API request to:', url);  // Log the API URL
-
-    const response = await axios.get(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,  // Use the access token here
-      },
-    });
-
-    console.log('Company Info:', response.data);  // Log the API response data
-    res.json(response.data);  // Send company info response
-  } catch (error) {
-    // Detailed error logging
-    console.error('Error fetching company info:', error.response ? error.response.data : error.message);
-    res.status(500).send('Error fetching company info');
+    const token = await exchangePaypalCode(code);
+    req.session.paypal_access_token = token.access_token;
+    res.send('✅ PayPal Tokens received!');
+  } catch (err) {
+    console.error('PayPal Token Error:', err);
+    res.status(500).send('PayPal OAuth failed');
   }
 });
 
-// Refresh the access token using the refresh token (when the access token expires)
-app.get('/refresh', async (req, res) => {
-  const refreshToken = req.session.refresh_token;
+async function exchangePaypalCode(code) {
+  const url = 'https://api.paypal.com/v1/identity/openidconnect/tokenservice';
 
-  if (!refreshToken) {
-    return res.status(400).send('Refresh token is missing');
+  const params = new URLSearchParams();
+  params.append('grant_type', 'authorization_code');
+  params.append('code', code);
+  params.append('redirect_uri', process.env.PAYPAL_REDIRECT_URI);
+
+  const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+
+  const response = await axios.post(url, params, {
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  });
+
+  return response.data;
+}
+
+// 🔎 PayPal Account Info
+app.get('/paypal-account-info', async (req, res) => {
+  if (!req.session.paypal_access_token) {
+    return res.status(400).send('Missing PayPal access token');
   }
-
-  const tokenUrl = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-  const auth = Buffer.from(`${process.env.QB_CLIENT_ID}:${process.env.QB_CLIENT_SECRET}`).toString('base64');
 
   try {
-    const response = await axios.post(
-      tokenUrl,
-      `grant_type=refresh_token&refresh_token=${refreshToken}`,
-      {
-        headers: {
-          Authorization: `Basic ${auth}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      }
-    );
-
-    // Store the new access token and refresh token in the session
-    req.session.access_token = response.data.access_token;  // Store the new access token
-    req.session.refresh_token = response.data.refresh_token;  // Store the new refresh token
-
-    res.json({ message: 'Tokens refreshed successfully', tokens: response.data });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Error refreshing token');
+    const info = await getPaypalInfo(req.session.paypal_access_token);
+    res.json(info);
+  } catch (err) {
+    console.error('Error fetching PayPal info:', err);
+    res.status(500).send('PayPal Info Error');
   }
 });
 
-// Test route for checking server is working
-app.get('/', (req, res) => {
-  res.send('Server is running!');
-});
+async function getPaypalInfo(accessToken) {
+  const url = 'https://api.paypal.com/v1/identity/oauth2/userinfo';
+  const response = await axios.get(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+  return response.data;
+}
 
-// Start the server
+// 🔧 Auto-create missing files if needed, monitor files for changes, and start tasks
 app.listen(PORT, () => {
-  console.log(`Server is up and running at http://localhost:${PORT}`);
+  console.log(`🚀 Rae Command Server Online at http://localhost:${PORT}`);
+  autoCreateMissingFiles(); // Rae auto-creates missing files at startup
+  monitorFiles(); // Rae starts self-healing and file monitoring
+  startDailySelfAudit(); // Rae starts self-auditing
+  startStoreScanner(); // Rae starts scanning for stores
+  startAutoSaleEngine(); // Rae starts the sales engine
+  startPaymentMonitor(); // Rae starts payment monitoring
 });

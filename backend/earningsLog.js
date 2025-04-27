@@ -1,37 +1,41 @@
 // backend/earningsLog.js
 
+const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
-const refreshAccessToken = require("./refreshToken");  // Import the refresh function
+const router = express.Router();
+const refreshAccessToken = require("./refreshToken"); // Import the refresh function
 
-async function getEarnings() {
-  let tokens = JSON.parse(fs.readFileSync("./backend/tokens.json"));
-  let accessToken = tokens.access_token;
-  let realmId = tokens.realmId;
-
-  // Check if the access token has expired (optional: you can check 'expires_in' field)
-  if (Date.now() / 1000 > tokens.expires_in) {  // If token expired
-    console.log("Access token expired. Refreshing...");
-    const newTokens = await refreshAccessToken();  // Refresh the token
-    accessToken = newTokens.access_token;  // Use the new access token
-  }
-
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    Accept: "application/json",
-  };
-
-  const url = `https://sandbox-quickbooks.api.intuit.com/v3/company/${realmId}/reports/ProfitAndLoss?start_date=2024-01-01&end_date=2024-12-31`;
-
+router.get("/earnings", async (req, res) => {
   try {
-    const response = await axios.get(url, { headers });
-    console.log("QuickBooks API Response:", response.data);  // Log the response data
-    return response.data;
-  } catch (error) {
-    // Log detailed error information
-    console.error("Error fetching earnings data: ", error.response?.data || error.message);
-    throw new Error("Error fetching earnings.");
-  }
-}
+    let tokens = JSON.parse(fs.readFileSync("./backend/tokens.json"));
+    let accessToken = tokens.access_token;
+    let realmId = tokens.realmId;
 
-module.exports = { getEarnings };
+    // Optional: Check token expiration and refresh if needed
+    if (Date.now() / 1000 > tokens.expires_in) {
+      console.log("🔄 Access token expired. Refreshing...");
+      const newTokens = await refreshAccessToken();
+      accessToken = newTokens.access_token;
+    }
+
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    };
+
+    const url = `https://quickbooks.api.intuit.com/v3/company/${realmId}/reports/ProfitAndLoss?start_date=2024-01-01&end_date=2024-12-31`;
+
+    const response = await axios.get(url, { headers });
+
+    const income = response.data.Rows?.Row?.[0]?.Summary?.ColData?.[1]?.value || "0.00";
+    console.log(`✅ Total Income: $${income}`);
+
+    res.status(200).json({ income });
+  } catch (error) {
+    console.error("❌ Error fetching earnings:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to fetch earnings" });
+  }
+});
+
+module.exports = router;

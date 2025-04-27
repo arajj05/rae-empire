@@ -132,3 +132,33 @@ app.listen(3000, () => {
 app.get('/', (req, res) => {
   res.send('Welcome to the app!');
 });
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const App = () => {
+  const [companyInfo, setCompanyInfo] = useState(null);
+
+  useEffect(() => {
+    // Make the API call to your backend
+    axios.get(`${process.env.REACT_APP_BACKEND_URL}/companyinfo`)
+      .then(response => {
+        setCompanyInfo(response.data);
+      })
+      .catch(error => {
+        console.error('Error fetching company info:', error);
+      });
+  }, []);
+
+  return (
+    <div className="App">
+      <h1>QuickBooks Company Info</h1>
+      {companyInfo ? (
+        <pre>{JSON.stringify(companyInfo, null, 2)}</pre>
+      ) : (
+        <p>Loading...</p>
+      )}
+    </div>
+  );
+};
+
+export default App;
