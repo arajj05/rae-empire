@@ -1,21 +1,25 @@
 {
   "name": "rae-empire",
   "version": "1.0.0",
+  "description": "Your app description",
+  "main": "app.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node app.js"
   },
   "dependencies": {
+    "@mailchimp/mailchimp_marketing": "^3.0.80",
     "axios": "^1.9.0",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^10.0.0",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
+    "fs": "^0.0.1-security",
+    "nodemailer": "^6.10.1",
     "qs": "^6.14.0",
     "querystring": "^0.2.1",
     "sentiment": "^5.0.2"
   },
-  "main": "app.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/arajj05/rae-empire.git"
@@ -26,6 +30,15 @@
   "bugs": {
     "url": "https://github.com/arajj05/rae-empire/issues"
   },
-  "homepage": "https://github.com/arajj05/rae-empire#readme",
-  "description": ""
+  "homepage": "https://github.com/arajj05/rae-empire#readme"
+}
+{
+  "message": "Authorization successful",
+  "tokens": {
+    "expires_in": 3600,
+    "x_refresh_token_expires_in": 8726400,
+    "access_token": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2IiwieC5vcmciOiJIMCJ9..YD0F6Wd2jRMXzuHZ0FPz5Q.3YQjkdAYIpw6bBdJM2wISXW3SjMqJ7lJcLQeJew76cftqfcRIIkTd9aG5Oia478O36K44pgxxv0Yf3gAk0NGGqLF56pfCPNxhXuGKqvIf0LmWIKfzgYPt3zKgvzqQVhGYIhW0-f93u_8muzFDyJ9OK1CFUKLDXNcacJnQre-MGrUA8kzDTAXU3kLGFz80v066sJmk4emvFKQg2ikMfN0fWVnwJOef6N7tJBIdyuDcdRH5eIClxkImf7u7Yvdp8EQS51VWi7T5n0BDTfRWQQ7RSob33LowoptFxFJMBxzGnaJIIKgp1FjajxvH6V5IVfivWGC8OIVdvyouqKM_gEZeiw4os0GgLYN7YxGZHmyyLhvZntqEqvr7IATgwwf9b4O8-L2JenmyfJyNiroj_Lm6Vr_4mTq_We9VHrWB2-37VQ2O-n_ZWZsX-hLhRE3mgjTWA3il-_5ymhoa8K4FnH9D_BzXx33OaozNLtC6DY1_Ew.NndvJY-BRHDGNtIV5vMR1w",
+    "token_type": "bearer",
+    "refresh_token": "RT1-28-H0-17544390803ejfdoqga938tqvp0161"
+  }
 }

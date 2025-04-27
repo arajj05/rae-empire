@@ -1,32 +1,34 @@
 const axios = require('axios');
 const qs = require('qs');
 
-// Replace with your actual refresh token, client ID, client secret, and redirect URI
-const refreshToken = 'your-refresh-token-here';  // Replace with your actual refresh token
-const clientId = 'your-client-id-here';  // Replace with your actual client ID
-const clientSecret = 'your-client-secret-here';  // Replace with your actual client secret
-const redirectUri = 'http://localhost:3000/callback';  // Your redirect URI
+// Replace with your actual Refresh Token and credentials
+const refreshToken = 'RT1-11-H0-1754353037lzs5jdv777fllh5imqdv';  // Your refresh token from the OAuth process
+const clientId = 'ABhhFcGAPNJlLY6A57KA78G8pRJoaMeCWUzIhVRAtn4kpA8gRO';  // Your QuickBooks Client ID
+const clientSecret = 'tqZuwmBeBtmwwMmVbj4OwR20yeeftrVndPgw3rAc';  // Your QuickBooks Client Secret
 
-// Prepare the data for the token request
-const data = qs.stringify({
+// The credentials for Basic Authentication (encoded client_id:client_secret)
+const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+// Request body to refresh access token
+const refreshRequestBody = qs.stringify({
   grant_type: 'refresh_token',
-  refresh_token: refreshToken,
-  client_id: clientId,
-  client_secret: clientSecret,
-  redirect_uri: redirectUri
+  refresh_token: refreshToken,  // Using the stored refresh token
+  client_id: clientId,  // Your QuickBooks Client ID
+  client_secret: clientSecret,  // Your QuickBooks Client Secret
 });
 
-// Make the request to refresh the token
-axios.post('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', data, {
+// Make the request to refresh the access token
+axios.post('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', refreshRequestBody, {
   headers: {
+    'Authorization': `Basic ${authHeader}`,
     'Content-Type': 'application/x-www-form-urlencoded',
-  },
+  }
 })
 .then(response => {
-  // Save the new access token
-  const newAccessToken = response.data.access_token;
-  console.log('New Access Token:', newAccessToken);  // Save this new token for use in subsequent requests
+  // Output the new access token and refresh token
+  console.log('New Access Token:', response.data.access_token);
+  console.log('New Refresh Token:', response.data.refresh_token);
 })
 .catch(error => {
-  console.error('Error refreshing access token:', error.response ? error.response.data : error.message);
+  console.error('Error refreshing token:', error.response ? error.response.data : error.message);
 });
