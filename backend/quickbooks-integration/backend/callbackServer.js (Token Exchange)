@@ -1,57 +1,42 @@
-const express = require("express");
-const axios = require("axios");
-const router = express.Router();
-
 router.get("/callback", async (req, res) => {
-  const { code, state } = req.query;  // Extract the authorization code and state from the query params
+  const { code, state } = req.query;
 
-  if (!code) {
-    console.error("❌ No authorization code received!");
-    return res.status(400).send("<h2>❌ Error: No authorization code received!</h2>");
+  // Validate the state
+  if (state !== req.session.state) {
+    return res.status(400).send("State mismatch error");
   }
 
-  // Ensure that the state matches (add security by verifying the state)
-  const expectedState = req.session.state;  // Retrieve the stored state from the session
-  if (state !== expectedState) {
-    console.error("❌ State mismatch!");
-    return res.status(400).send("<h2>❌ Error: State mismatch!</h2>");
-  }
+  // Prepare the request to exchange the authorization code for an access token
+  const tokenRequest = {
+    client_id: process.env.QB_CLIENT_ID,
+    client_secret: process.env.QB_CLIENT_SECRET,
+    code: code,
+    redirect_uri: "https://rae-empire.vercel.app/callback",
+    grant_type: 'authorization_code', // Use authorization code grant type
+  };
 
   try {
-    const tokenResponse = await exchangeCodeForTokens(code); // Function to exchange code for tokens
-    console.log('Token Response:', tokenResponse);
-    res.send('Authorization complete!');
+    // Make the request to QuickBooks to exchange the code for tokens
+    const response = await axios.post('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', null, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${process.env.QB_CLIENT_ID}:${process.env.QB_CLIENT_SECRET}`).toString('base64')}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      params: tokenRequest,
+    });
+
+    // Store the tokens (access_token, refresh_token) in session or database
+    req.session.access_token = response.data.access_token;
+    req.session.refresh_token = response.data.refresh_token;
+
+    // Redirect the user to your dashboard or another page after success
+    res.redirect('/dashboard'); // Replace with the route you want the user to be redirected to
+
   } catch (error) {
-    console.error("❌ Error exchanging code for tokens:", error);
-    res.status(500).send("<h2>❌ Error exchanging code for tokens</h2>");
+    // Handle errors, e.g., token exchange failure
+    console.error("Error exchanging code for token:", error);
+    res.status(500).send("Error exchanging code for token");
   }
 });
-
-async function exchangeCodeForTokens(code) {
-  const tokenUrl = 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
-  const clientId = process.env.QB_CLIENT_ID;
-  const clientSecret = process.env.QB_CLIENT_SECRET;
-  const redirectUri = process.env.QB_REDIRECT_URI;
-
-  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-
-  const params = new URLSearchParams();
-  params.append("code", code);
-  params.append("redirect_uri", redirectUri);
-  params.append("grant_type", "authorization_code");
-
-  try {
-    const response = await axios.post(tokenUrl, params, {
-      headers: {
-        "Authorization": `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
-    return response.data; // This should contain access_token, refresh_token, etc.
-  } catch (error) {
-    console.error("Error during token exchange:", error);
-    throw error;
-  }
-}
 
 module.exports = router;
